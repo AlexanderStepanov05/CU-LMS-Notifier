@@ -1,0 +1,11 @@
+server:
+  port: 8080
+
+telegram:
+  bot:
+    token: 7599437177:AAHvnLsKPA68Jg8vN7yKTrFDCQeqGkiKrn0
+    username: cuLmsNotifier_bot
+
+auth:
+  service:
+    url: http://localhost:8081/auth/token
