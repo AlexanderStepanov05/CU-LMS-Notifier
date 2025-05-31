@@ -1,0 +1,31 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: parser-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/courses}
+      database: courses
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=1h
+
+parser:
+  target:
+    url: https://example.edu/courses
+  schedule:
+    cron: 0 */10 * * * *
+  timeout: 10000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics, prometheus
+  prometheus:
+    metrics:
+      export:
+        enabled: true

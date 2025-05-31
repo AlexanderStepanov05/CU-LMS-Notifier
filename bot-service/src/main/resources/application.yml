@@ -1,0 +1,35 @@
+server:
+  port: 8081
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: bot-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/bot}
+      database: bot
+
+telegram:
+  bot:
+    token: ${BOT_TOKEN}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics, prometheus, info
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+info:
+  app:
+    name: @project.name@
+    version: @project.version@
+    description: Telegram bot service

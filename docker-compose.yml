@@ -1,0 +1,118 @@
+services:
+  # MongoDB - общее хранилище данных
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    networks:
+      - cu-network
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CLOUD_GATEWAY_ROUTES_0_ID: bot-service
+      SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://bot-service:8081
+      SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0: Path=/bot/**
+      SPRING_CLOUD_GATEWAY_ROUTES_1_ID: parser-service
+      SPRING_CLOUD_GATEWAY_ROUTES_1_URI: http://parser-service:8082
+      SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0: Path=/parser/**
+      SPRING_CLOUD_GATEWAY_ROUTES_2_ID: notification-service
+      SPRING_CLOUD_GATEWAY_ROUTES_2_URI: http://notification-service:8083
+      SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0: Path=/notification/**
+    depends_on:
+      - bot-service
+      - parser-service
+      - notification-service
+    networks:
+      - cu-network
+
+  # Сервис бота
+  bot-service:
+    build:
+      context: ./bot-service
+    container_name: bot-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://root:example@mongodb:27017/bot?authSource=admin
+      TELEGRAM_BOT_TOKEN: ${BOT_TOKEN}
+    depends_on:
+      - mongodb
+    networks:
+      - cu-network
+
+  # Сервис парсинга
+  parser-service:
+    build:
+      context: ./parser-service
+    container_name: parser-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://root:example@mongodb:27017/parser?authSource=admin
+      PARSER_TARGET_URL: https://example.edu/courses
+    depends_on:
+      - mongodb
+    networks:
+      - cu-network
+
+  # Сервис уведомлений
+  notification-service:
+    build:
+      context: ./notification-service
+    container_name: notification-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://root:example@mongodb:27017/notification?authSource=admin
+      SERVICES_PARSER_URL: http://parser-service:8082
+      SERVICES_BOT_URL: http://bot-service:8081
+    depends_on:
+      - mongodb
+      - bot-service
+      - parser-service
+    networks:
+      - cu-network
+
+  # Мониторинг (опционально)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - cu-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    networks:
+      - cu-network
+
+volumes:
+  mongo-data:
+
+networks:
+  cu-network:
+    driver: bridge

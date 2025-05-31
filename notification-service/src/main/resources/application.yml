@@ -1,0 +1,71 @@
+server:
+  port: 8083
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: notification-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/notifications}
+      database: notifications
+
+services:
+  parser:
+    url: http://parser-service:8082
+  bot:
+    url: http://bot-service:8081
+
+feign:
+  client:
+    config:
+      default:
+        connect-timeout: 5000
+        read-timeout: 10000
+        logger-level: full
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      parser-service:
+        register-health-indicator: true
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        sliding-window-type: count_based
+        sliding-window-size: 10
+      bot-service:
+        register-health-indicator: true
+        failure-rate-threshold: 30
+        minimum-number-of-calls: 10
+        sliding-window-type: count_based
+        sliding-window-size: 20
+
+notification:
+  schedule:
+    rate: 300000
+  digest:
+    cron: "0 0 9,18 * * MON-FRI"
+  retry:
+    max-attempts: 3
+    initial-interval: 1000
+    multiplier: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics, prometheus, info
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+info:
+  app:
+    name: @project.name@
+    version: @project.version@
+    description: Microservice for managing notifications
