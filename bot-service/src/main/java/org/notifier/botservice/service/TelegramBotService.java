@@ -2,11 +2,15 @@ package org.notifier.botservice.service;
 
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.UpdatesListener;
+import com.pengrad.telegrambot.model.Message;
 import com.pengrad.telegrambot.model.Update;
 import com.pengrad.telegrambot.request.SendMessage;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.notifier.botservice.client.ParserServiceClient;
+import org.notifier.botservice.model.User;
+import org.notifier.botservice.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +24,8 @@ public class TelegramBotService {
     @Value("${telegram.bot.token}")
     private String botToken;
 
-    private final CommandHandler commandHandler;
+    private final UserRepository userRepository;
+    private final ParserServiceClient parserServiceClient;
 
     private TelegramBot bot;
 
@@ -46,24 +51,59 @@ public class TelegramBotService {
 
     private void processUpdates(List<Update> updates) {
         for (Update update : updates) {
-            try {
-                SendMessage response = commandHandler.handleUpdate(update);
-                if (response != null) {
-                    bot.execute(response);
-                }
-            } catch (Exception e) {
-                log.error("Error processing update: {}", update.updateId(), e);
-                if (update.message() != null) {
-                    bot.execute(new SendMessage(update.message().chat().id(),
-                            "⚠️ Произошла ошибка при обработке вашего запроса. Попробуйте позже."));
-                }
+            if (update.message() != null) {
+                processMessage(update.message());
             }
         }
     }
 
-    public void sendMessage(Long chatId, String message) {
+    private void processMessage(Message message) {
+        Long chatId = message.chat().id();
+        String text = message.text();
+
+        if (text == null) {
+            sendMessage(chatId, "Пожалуйста, используйте текстовые команды");
+            return;
+        }
+
+        switch (text) {
+            case "/start" -> handleStart(chatId);
+            case "/stop" -> handleStop(chatId);
+            default -> handleToken(chatId, text);
+        }
+    }
+
+    private void handleStart(Long chatId) {
+        sendMessage(chatId,
+                "👋 Добро пожаловать!\n\n" +
+                        "Я бот для уведомлений об учебных заданиях.\n" +
+                        "Отправьте ваш токен для начала работы.");
+    }
+
+    private void handleStop(Long chatId) {
+        userRepository.deleteByUserId(chatId);
+        sendMessage(chatId, "❌ Вы отписались от уведомлений");
+    }
+
+    private void handleToken(Long chatId, String token) {
         try {
-            bot.execute(new SendMessage(chatId, message));
+            Object response = parserServiceClient.getTasks(token);
+
+            User user = new User();
+            user.setUserId(chatId);
+            user.setToken(token);
+            userRepository.save(user);
+
+            sendMessage(chatId, "✅ Токен принят! Вы будете получать уведомления.");
+        } catch (Exception e) {
+            log.error("Token validation failed", e);
+            sendMessage(chatId, "❌ Неверный токен. Попробуйте снова.");
+        }
+    }
+
+    public void sendMessage(Long chatId, String text) {
+        try {
+            bot.execute(new SendMessage(chatId, text));
             log.info("Message sent to user: {}", chatId);
         } catch (Exception e) {
             log.error("Failed to send message to user: {}", chatId, e);

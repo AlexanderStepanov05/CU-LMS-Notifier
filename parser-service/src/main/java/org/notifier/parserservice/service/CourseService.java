@@ -10,6 +10,10 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.http.HttpStatus;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +25,11 @@ public class CourseService {
 
     private final CourseRepository courseRepository;
     private final CourseParser courseParser;
+
+    @Value("${lms.base-url}")
+    private String lmsBaseUrl;
+
+    private final WebClient webClient = WebClient.create();
 
     @CacheEvict(value = "courses", allEntries = true)
     public List<Course> parseAndSaveNewCourses() throws ParseException {
@@ -68,5 +77,27 @@ public class CourseService {
             course.setNotified(true);
             courseRepository.save(course);
         });
+    }
+
+    public boolean checkToken(String token) {
+        return webClient.get()
+                .uri(lmsBaseUrl + "/account/me")
+                .cookie("bff.cookie", token)
+                .retrieve()
+                .onStatus(HttpStatus::isError, resp -> Mono.empty())
+                .toBodilessEntity()
+                .map(resp -> resp.getStatusCode().is2xxSuccessful())
+                .blockOptional()
+                .orElse(false);
+    }
+
+    public List<Object> getAllTasks(String token) {
+        return webClient.get()
+                .uri(lmsBaseUrl + "/micro-lms/tasks/student")
+                .cookie("bff.cookie", token)
+                .retrieve()
+                .bodyToFlux(Object.class)
+                .collectList()
+                .block();
     }
 }

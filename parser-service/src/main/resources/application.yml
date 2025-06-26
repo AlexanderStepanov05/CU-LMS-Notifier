@@ -29,3 +29,6 @@ management:
     metrics:
       export:
         enabled: true
+
+lms:
+  base-url: https://my.centraluniversity.ru/api
